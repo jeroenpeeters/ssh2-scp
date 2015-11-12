@@ -13,6 +13,8 @@ new (ssh2.Server)({ privateKey: fs.readFileSync('./id_rsa') }, (client) ->
       session.once 'exec', scp (transfer) ->
         transfer.on 'done', ->
           console.log 'scp exited'
+        transfer.on 'file', (path, name, data) ->
+          console.log 'file', path, name, data
       # session.once 'exec', (accept, reject, info) ->
       #   if scp.isScp info
       #     scp accept, reject, info
