@@ -11,7 +11,7 @@ acceptFile = (mode, size, filename) ->
   console.log 'acceptFile', mode, size, filename
   buffer = new Buffer(size, 'binary')
   bytesCopied = 0
-  ->
+  (cb) ->
     remainingBytes = size - bytesCopied
     bytesToCopy = if remainingBytes <= @data.length then remainingBytes else @data.length
     @data.copy buffer, bytesCopied, 0, bytesToCopy
@@ -20,16 +20,18 @@ acceptFile = (mode, size, filename) ->
       @emitter.emit 'file', @filePath, filename, buffer
       sendOkMessage @stream
       #console.log buffer.toString('ascii')
-      null
+      cb null
 
-transferProcessor = ->
+transferProcessor = (cb) ->
   match = @data.toString().match /^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/
   [type, mode, size, filename] = match[1..]
   console.log type, mode, size, filename
   sendOkMessage @stream
-  acceptFile mode, (parseInt size), filename
+  cb acceptFile mode, (parseInt size), filename
 
 requestProcessor = ->
+  @emitter.emit 'getfile', @filePath, ->
+
   console.log @data
   @stream.write 'C0775 3 name\n'
   ->
@@ -49,9 +51,10 @@ requestProcessor = ->
     -> console.log 'data2', @data.toString()
   ###
 
-scpCmdProcessor = (cmd) ->
+scpCmdProcessor = (cmd, stream) ->
   if match = cmd.match /^scp -t (.+)$/
     console.log 'file transfer'
+    sendOkMessage stream
     [ transferProcessor, match[1] ]
   else if match = cmd.match /^scp -f (.+)$/
     console.log 'file request'
@@ -64,17 +67,17 @@ scp = (installListeners) ->
     if not scp.isScp info then return reject()
     console.log 'Client wants to execute scp: ', info
     stream = accept()
-    [processor, filePath] = scpCmdProcessor info.command
+    [processor, filePath] = scpCmdProcessor info.command, stream
     stream.on 'data', (data) ->
       if processor
-        p = processor.bind(emitter:emitter, data: data, stream: stream, filePath: filePath)()
-        processor = p if typeof p == 'function' or p == null
+        processor.bind(emitter:emitter, data: data, stream: stream, filePath: filePath) (p) ->
+          processor = p if typeof p == 'function' or p == null
 
-        if processor == null
-          #nothing to process, close the connection
-          stream.exit 0
-          stream.end()
-          emitter.emit 'done'
+          if processor == null
+            #nothing to process, close the connection
+            stream.exit 0
+            stream.end()
+            emitter.emit 'done'
       else
         console.log 'no processor, but data is received', data.toString()
 
