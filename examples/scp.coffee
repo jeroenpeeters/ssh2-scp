@@ -13,9 +13,9 @@ new (ssh2.Server)({ privateKey: fs.readFileSync('./id_rsa') }, (client) ->
       session.once 'exec', scp (transfer) ->
         transfer.on 'done', ->
           console.log 'scp exited'
-        transfer.on 'file', (path, name, data) ->
+        transfer.on 'write_file', (path, name, data) ->
           console.log 'file', path, name, data
-        transfer.on 'getfile', (path, cb) ->
+        transfer.on 'read_file', (path, cb) ->
           cb 'Dit is een testje'
       # session.once 'exec', (accept, reject, info) ->
       #   if scp.isScp info
@@ -24,5 +24,5 @@ new (ssh2.Server)({ privateKey: fs.readFileSync('./id_rsa') }, (client) ->
       #     console.log 'exec is not scp', info
   ).on 'end', ->
     console.log 'Client disconnected'
-).listen 2222, '127.0.0.1', ->
+).listen 2222, '0.0.0.0', ->
   console.log 'Listening on port ' + @address().port
