@@ -17,48 +17,40 @@ acceptFile = (mode, size, filename) ->
     @data.copy buffer, bytesCopied, 0, bytesToCopy
     bytesCopied += bytesToCopy
     if bytesCopied >= size
-      @emitter.emit 'file', @filePath, filename, buffer
+      @emitter.emit 'write_file', @filePath, filename, buffer
       sendOkMessage @stream
-      #console.log buffer.toString('ascii')
       cb null
 
 transferProcessor = (cb) ->
+  console.log @data.toString()
   match = @data.toString().match /^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/
   [type, mode, size, filename] = match[1..]
   console.log type, mode, size, filename
   sendOkMessage @stream
   cb acceptFile mode, (parseInt size), filename
 
-requestProcessor = ->
-  @emitter.emit 'getfile', @filePath, ->
-
-  console.log @data
-  @stream.write 'C0775 3 name\n'
-  ->
-    console.log 'y', @data
-    #sendOkMessage @stream
-    @stream.write 'aij'
-    sendOkMessage @stream
-    ->
-      console.log 'x',@data
-      null
-  ###
-  ->
-    console.log 'data', @data.toString()
-    console.log 'processor'
-    @stream.write 'hoi'
-    @stream.write new Buffer('\x01', 'binary')
-    -> console.log 'data2', @data.toString()
-  ###
+requestProcessor = (cb) ->
+  @emitter.emit 'read_file', @filePath, (data) =>
+    @stream.write "C0775 #{data.length} name\n"
+    cb ->
+      # todo: assert that client sends \x00 before sending data
+      @stream.write data
+      sendOkMessage @stream
+      cb ->
+        # todo: assert that client sends \x00
+        cb null
 
 scpCmdProcessor = (cmd, stream) ->
-  if match = cmd.match /^scp -t (.+)$/
+  console.log
+  if match = cmd.match /-t (.+)/
     console.log 'file transfer'
     sendOkMessage stream
     [ transferProcessor, match[1] ]
-  else if match = cmd.match /^scp -f (.+)$/
+  else if match = cmd.match /-f (.+)/
     console.log 'file request'
     [ requestProcessor, match[1] ]
+  else
+    console.error 'Unknown scp command:', cmd
 
 scp = (installListeners) ->
   emitter = new EventEmitter()
@@ -79,10 +71,9 @@ scp = (installListeners) ->
             stream.end()
             emitter.emit 'done'
       else
-        console.log 'no processor, but data is received', data.toString()
+        console.warn 'no processor, but data is received', data.toString()
 
     stream.on 'error', (err) -> console.log 'err', err
-    #sendOkMessage stream
 
 scp.isScp = (info) -> info?.command?.match /^scp/
 
