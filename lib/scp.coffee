@@ -4,7 +4,7 @@ getFilePathFromInfo = (info) ->
   [match, filename] = info?.command?.match /^scp -t (.+)$/
   filename
 
-sendOkMessage = (stream) ->
+_sendOkMessage = (stream) ->
   stream.write new Buffer('\x00', 'binary')
 
 acceptFile = (mode, size, filename) ->
@@ -17,17 +17,41 @@ acceptFile = (mode, size, filename) ->
     @data.copy buffer, bytesCopied, 0, bytesToCopy
     bytesCopied += bytesToCopy
     if bytesCopied >= size
+      if @data.length > bytesToCopy
+        console.log 'there is more data to copy then we just copied!!!!'
+        console.log 'DATA', @data.toString()
       @emitter.emit 'write_file', @filePath, filename, buffer
-      sendOkMessage @stream
-      cb null
+      @stream.sendOkMessage()
+      #cb (cb2) ->
+      #  console.log 'CB2', @data, @data.toString()
+      cb transferProcessor
+
+acceptDirectory = (mode, filename) ->
+
+
+
 
 transferProcessor = (cb) ->
-  console.log @data.toString()
-  match = @data.toString().match /^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/
-  [type, mode, size, filename] = match[1..]
-  console.log type, mode, size, filename
-  sendOkMessage @stream
-  cb acceptFile mode, (parseInt size), filename
+  console.log 'transferProcessor', @data, @data[0], @data[0] == 0, @data.toString()
+  matches = @data.toString().match
+  if [all, type, mode, size, filename] = @data.toString().match(/^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/) or [all, type] = @data.toString().match /^(E)\n$/
+    if type == 'C'
+      @stream.sendOkMessage()
+      cb acceptFile mode, (parseInt size), filename
+    else if type == 'D'
+      #cb acceptDirectory mode, filename
+      console.log 'acceptDirectory', mode, filename
+      @emitter.emit 'mkdir', mode, filename
+      @stream.sendOkMessage()
+      cb transferProcessor
+    else if type == 'E'
+      @stream.sendOkMessage()
+      @stream.sendOkMessage()
+      cb transferProcessor
+    else
+      console.log 'unknown type', type
+      # , =>
+      #   @stream.sendOkMessage()
 
 requestProcessor = (cb) ->
   @emitter.emit 'read_file', @filePath, (data) =>
@@ -35,7 +59,7 @@ requestProcessor = (cb) ->
     cb ->
       # todo: assert that client sends \x00 before sending data
       @stream.write data
-      sendOkMessage @stream
+      @stream.sendOkMessage()
       cb ->
         # todo: assert that client sends \x00
         cb null
@@ -43,11 +67,9 @@ requestProcessor = (cb) ->
 scpCmdProcessor = (cmd, stream) ->
   console.log
   if match = cmd.match /-t (.+)/
-    console.log 'file transfer'
-    sendOkMessage stream
+    stream.sendOkMessage()
     [ transferProcessor, match[1] ]
   else if match = cmd.match /-f (.+)/
-    console.log 'file request'
     [ requestProcessor, match[1] ]
   else
     console.error 'Unknown scp command:', cmd
@@ -59,6 +81,7 @@ scp = (installListeners) ->
     if not scp.isScp info then return reject()
     console.log 'Client wants to execute scp: ', info
     stream = accept()
+    stream.sendOkMessage = -> _sendOkMessage stream
     [processor, filePath] = scpCmdProcessor info.command, stream
     stream.on 'data', (data) ->
       if processor
