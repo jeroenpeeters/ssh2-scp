@@ -1,0 +1,14 @@
+{
+  "name": "scp-ssh2-example",
+  "version": "1.0.0",
+  "description": "SCP example",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jeroen Peeters",
+  "license": "GPL-2.0",
+  "dependencies": {
+    "ssh2": "^0.4.13"
+  }
+}
