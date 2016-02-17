@@ -7,8 +7,8 @@ getFilePathFromInfo = (info) ->
 _sendOkMessage = (stream) ->
   stream.write new Buffer('\x00', 'binary')
 
-acceptFile = (isRecursive, dir, mode, size, filename) ->
-  console.log 'acceptFile', isRecursive, dir, mode, size, filename
+acceptFile = (isRecursive, dirs, mode, size, filename) ->
+  console.log 'acceptFile', isRecursive, dirs, mode, size, filename
   buffer = new Buffer(size, 'binary')
   bytesCopied = 0
   (cb) ->
@@ -20,33 +20,37 @@ acceptFile = (isRecursive, dir, mode, size, filename) ->
       if @data.length > bytesToCopy
         console.log 'there is more data to copy then we just copied!!!!'
         console.log 'DATA', @data.toString()
-      @emitter.emit 'write_file', @filePath, dir, filename, buffer
+      @emitter.emit 'write_file', @filePath, dirs, filename, buffer
       @stream.sendOkMessage()
       if isRecursive
-        cb transferProcessor isRecursive, dir
+        cb transferProcessor isRecursive, dirs
       else
         cb null
 
 acceptDirectory = (mode, filename) ->
 
 
-transferProcessor = (isRecursive, dir = '') -> (cb) ->
+transferProcessor = (isRecursive, dirs = []) -> (cb) ->
   console.log 'transferProcessor', @data, @data[0], @data[0] == 0, @data.toString()
   if match = @data.toString().match(/^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/)
     [all, type, mode, size, filename] = match
     if type == 'C'
       @stream.sendOkMessage()
-      cb acceptFile isRecursive, dir,  mode, (parseInt size), filename
+      cb acceptFile isRecursive, dirs,  mode, (parseInt size), filename
     else if type == 'D'
       #cb acceptDirectory mode, filename
-      @emitter.emit 'mkdir', @filePath, dir, filename, mode
+      @emitter.emit 'mkdir', @filePath, dirs, filename, mode
       @stream.sendOkMessage()
-      cb transferProcessor isRecursive, "#{dir}/#{filename}"
+      dirs.push filename
+      cb transferProcessor isRecursive, dirs
   else if match = @data.toString().match /^(E)\n$/
     [all, type] = match
     if type == 'E'
       @stream.sendOkMessage()
-      cb null
+      if dirs.length is 1
+        cb null
+      else
+        cb transferProcessor isRecursive, dirs[0...dirs.length-1]
   else
     console.log 'I do not understand this:', @data.toString()
       # , =>
