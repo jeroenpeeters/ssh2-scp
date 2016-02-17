@@ -13,12 +13,12 @@ new (ssh2.Server)({ privateKey: fs.readFileSync('./id_rsa') }, (client) ->
       session.once 'exec', scp (transfer) ->
         transfer.on 'done', ->
           console.log 'scp exited'
-        transfer.on 'write_file', (path, name, data) ->
-          console.log 'impl::file', path, name, data
+        transfer.on 'write_file', (path, dir, name, data) ->
+          console.log 'impl::file', path, dir, name, data
         transfer.on 'read_file', (path, cb) ->
           cb "You requested: #{path}"
-        transfer.on 'mkdir', (mode, path) ->
-          console.log 'impl::mkdir', mode, path
+        transfer.on 'mkdir', (path, dir, name, mode) ->
+          console.log 'impl::mkdir', path, dir, name, mode
       # session.once 'exec', (accept, reject, info) ->
       #   if scp.isScp info
       #     scp accept, reject, info
