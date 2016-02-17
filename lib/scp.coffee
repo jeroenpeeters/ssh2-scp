@@ -7,8 +7,8 @@ getFilePathFromInfo = (info) ->
 _sendOkMessage = (stream) ->
   stream.write new Buffer('\x00', 'binary')
 
-acceptFile = (mode, size, filename) ->
-  console.log 'acceptFile', mode, size, filename
+acceptFile = (isRecursive, dir, mode, size, filename) ->
+  console.log 'acceptFile', isRecursive, dir, mode, size, filename
   buffer = new Buffer(size, 'binary')
   bytesCopied = 0
   (cb) ->
@@ -20,36 +20,35 @@ acceptFile = (mode, size, filename) ->
       if @data.length > bytesToCopy
         console.log 'there is more data to copy then we just copied!!!!'
         console.log 'DATA', @data.toString()
-      @emitter.emit 'write_file', @filePath, filename, buffer
+      @emitter.emit 'write_file', @filePath, dir, filename, buffer
       @stream.sendOkMessage()
-      #cb (cb2) ->
-      #  console.log 'CB2', @data, @data.toString()
-      cb transferProcessor
+      if isRecursive
+        cb transferProcessor isRecursive, dir
+      else
+        cb null
 
 acceptDirectory = (mode, filename) ->
 
 
-
-
-transferProcessor = (cb) ->
+transferProcessor = (isRecursive, dir = '') -> (cb) ->
   console.log 'transferProcessor', @data, @data[0], @data[0] == 0, @data.toString()
-  matches = @data.toString().match
-  if [all, type, mode, size, filename] = @data.toString().match(/^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/) or [all, type] = @data.toString().match /^(E)\n$/
+  if match = @data.toString().match(/^([C|D])([0-9]{4}) ([0-9]+) (.+)\n$/)
+    [all, type, mode, size, filename] = match
     if type == 'C'
       @stream.sendOkMessage()
-      cb acceptFile mode, (parseInt size), filename
+      cb acceptFile isRecursive, dir,  mode, (parseInt size), filename
     else if type == 'D'
       #cb acceptDirectory mode, filename
-      console.log 'acceptDirectory', mode, filename
-      @emitter.emit 'mkdir', mode, filename
+      @emitter.emit 'mkdir', @filePath, dir, filename, mode
       @stream.sendOkMessage()
-      cb transferProcessor
-    else if type == 'E'
+      cb transferProcessor isRecursive, "#{dir}/#{filename}"
+  else if match = @data.toString().match /^(E)\n$/
+    [all, type] = match
+    if type == 'E'
       @stream.sendOkMessage()
-      @stream.sendOkMessage()
-      cb transferProcessor
-    else
-      console.log 'unknown type', type
+      cb null
+  else
+    console.log 'I do not understand this:', @data.toString()
       # , =>
       #   @stream.sendOkMessage()
 
@@ -67,8 +66,9 @@ requestProcessor = (cb) ->
 scpCmdProcessor = (cmd, stream) ->
   console.log
   if match = cmd.match /-t (.+)/
+    recursive = cmd.match(/-r/)?
     stream.sendOkMessage()
-    [ transferProcessor, match[1] ]
+    [ transferProcessor(recursive), match[1] ]
   else if match = cmd.match /-f (.+)/
     [ requestProcessor, match[1] ]
   else
