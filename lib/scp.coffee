@@ -9,7 +9,7 @@ _sendOkMessage = (stream) ->
 
 acceptFile = (isRecursive, dirs, mode, size, filename) ->
   console.log 'acceptFile', isRecursive, dirs, mode, size, filename
-  buffer = new Buffer(size, 'binary')
+  buffer = Buffer.alloc(size, 0, 'binary')
   bytesCopied = 0
   (cb) ->
     remainingBytes = size - bytesCopied
