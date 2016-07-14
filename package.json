@@ -10,5 +10,8 @@
   "license": "GPL-2.0",
   "peerDependencies": {
     "ssh2": "~0.4.11"
+  },
+  "dependencies": {
+    "coffee-script": "^1.10.0"
   }
 }
